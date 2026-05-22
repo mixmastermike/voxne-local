@@ -1,0 +1,101 @@
+# voxne-local release workflow
+# ==============================
+# Triggered by a version tag push (e.g. v0.1.0).
+#
+# Builds a self-contained Windows binary and assembles a GitHub Release.
+#
+# Usage:
+#   git tag v0.1.0
+#   git push origin v0.1.0
+#
+# The release will appear at: github.com/mixmastermike/voxne-local/releases
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]*"
+
+permissions:
+  contents: write   # required to create a GitHub Release
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Build — Windows amd64
+  # ---------------------------------------------------------------------------
+  build:
+    runs-on: windows-latest
+    name: Build (voxne-local-windows-amd64.exe)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'requirements-build.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install PyTorch (CPU — runners have no GPU)
+        run: |
+          pip install --upgrade pip
+          pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-build.txt
+
+      - name: Build binary
+        run: python build.py
+
+      - name: Rename binary
+        shell: bash
+        run: mv dist/voxne-local.exe dist/voxne-local-windows-amd64.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: voxne-local-windows-amd64.exe
+          path: dist/voxne-local-windows-amd64.exe
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Release — publish to GitHub Releases
+  # ---------------------------------------------------------------------------
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Create GitHub Release
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums.txt
+        working-directory: dist
+        run: |
+          sha256sum voxne-local-windows-amd64.exe > checksums.txt
+          cat checksums.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/voxne-local-windows-amd64.exe
+            dist/checksums.txt

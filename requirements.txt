@@ -1,0 +1,27 @@
+# voxne-local runtime dependencies
+# Install with: pip install -r requirements.txt
+#
+# ⚠️  Requires Python 3.11. Python 3.12+ is not yet supported by all
+#     dependencies (spacy-pkuseg has no pre-built wheel and requires MSVC
+#     to compile from source on newer versions).
+#
+#     Create your venv with:  py -3.11 -m venv .venv
+#     Activate on Windows:    use cmd.exe, not PowerShell
+#                             .venv\Scripts\activate.bat
+#
+# PyTorch must be installed BEFORE this file, using the appropriate index:
+#
+#   NVIDIA GPU (CUDA 12.4 — RTX 30xx/40xx/50xx series):
+#     pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+#
+#   CPU only (slow — 3–8 minutes per take, fine for CI / no-GPU dev):
+#     pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+#
+# chatterbox-tts 0.1.7 requires torch==2.6.0 exactly. Installing torch from
+# the default PyPI index will pull an incompatible version.
+
+fastapi>=0.111.0,<1.0
+uvicorn[standard]>=0.29.0,<1.0
+chatterbox-tts==0.1.7
+soundfile
+pydantic>=2.0,<3.0

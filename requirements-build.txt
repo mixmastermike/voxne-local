@@ -1,0 +1,6 @@
+# Build-only dependencies — not needed at runtime.
+# Install with: pip install -r requirements-build.txt
+#
+# Used by build.py to produce the self-contained platform binary.
+
+pyinstaller>=6.0,<7.0
