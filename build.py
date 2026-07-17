@@ -71,6 +71,27 @@ COLLECT_ALL: list[str] = [
     "torchaudio",
 ]
 
+# Packages whose .dist-info metadata must be bundled.
+# diffusers (and transformers) call importlib.metadata.version() at import
+# time to version-check their dependencies. PyInstaller strips .dist-info
+# directories by default, so those checks blow up with PackageNotFoundError
+# before the model can load. --copy-metadata includes the metadata directory
+# for each package listed here.
+COPY_METADATA: list[str] = [
+    "diffusers",
+    "transformers",
+    "requests",
+    "huggingface-hub",
+    "tokenizers",
+    "numpy",
+    "tqdm",
+    "filelock",
+    "packaging",
+    "pyyaml",
+    "regex",
+    "safetensors",
+]
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -125,6 +146,9 @@ def build() -> None:
 
     for package in COLLECT_ALL:
         cmd += ["--collect-all", package]
+
+    for package in COPY_METADATA:
+        cmd += ["--copy-metadata", package]
 
     cmd.append("main.py")
 

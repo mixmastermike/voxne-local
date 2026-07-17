@@ -56,10 +56,16 @@ class _State(Enum):
 
 
 # Module-level state — protected by _lock for safe concurrent reads.
-_lock:  threading.Lock = threading.Lock()
-_state: _State         = _State.NOT_LOADED
-_model: Any            = None   # ChatterboxTTS instance once loaded
-_error: str | None     = None   # human-readable error if state == ERROR
+_lock:    threading.Lock = threading.Lock()
+_state:   _State         = _State.NOT_LOADED
+_model:   Any            = None   # ChatterboxTTS instance once loaded
+_error:   str | None     = None   # human-readable error if state == ERROR
+
+# Chatterbox's model.generate() is NOT thread-safe: it loads the reference
+# audio into the model as a conditioning signal before sampling, so two
+# concurrent calls race on that internal state and swap each other's voices.
+# _gen_lock serialises all generate() calls — one take at a time.
+_gen_lock: threading.Lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -352,13 +358,17 @@ def generate_take(
     )
 
     # cfg_scale is passed as cfg_weight to match Chatterbox's parameter name.
-    wav = model.generate(
-        text,
-        audio_prompt_path=reference_audio_path,
-        exaggeration=adj_exaggeration,
-        cfg_weight=adj_cfg,
-        temperature=adj_temperature,
-    )
+    # _gen_lock ensures only one generate() call runs at a time — Chatterbox
+    # stores the reference audio as an internal conditioning state on the model
+    # object, so concurrent calls race and swap each other's reference voices.
+    with _gen_lock:
+        wav = model.generate(
+            text,
+            audio_prompt_path=reference_audio_path,
+            exaggeration=adj_exaggeration,
+            cfg_weight=adj_cfg,
+            temperature=adj_temperature,
+        )
 
     sample_rate = model.sr
     duration    = _duration_seconds(wav, sample_rate)
