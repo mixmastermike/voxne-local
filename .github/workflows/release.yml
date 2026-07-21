@@ -1,14 +1,21 @@
 # voxne-local release workflow
 # ==============================
-# Triggered by a version tag push (e.g. v0.1.0).
+# Triggered by a version tag push (e.g. v0.1.2).
 #
-# Builds a self-contained Windows binary and assembles a GitHub Release.
+# Builds a self-contained Windows binary (~2.5GB) and publishes it. The binary
+# exceeds GitHub's 2GiB per-asset release limit, so it is NOT attached to the
+# GitHub Release — it's uploaded to Cloudflare R2 instead. The GitHub Release
+# stays as the lightweight "what's the latest version" pointer that the app's
+# CheckForUpdate()/manager.go reads (tag name only, no large asset attached).
 #
 # Usage:
-#   git tag v0.1.0
-#   git push origin v0.1.0
+#   git tag v0.1.2
+#   git push origin v0.1.2
 #
-# The release will appear at: github.com/mixmastermike/voxne-local/releases
+# Version pointer: github.com/mixmastermike/voxne-local/releases
+# Actual binary:   R2 bucket "voxne", under voxne-local/<tag>/ and voxne-local/latest/
+#
+# Requires repo secrets: R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
 
 name: Release
 
@@ -91,11 +98,27 @@ jobs:
           sha256sum voxne-local-windows-amd64.exe > checksums.txt
           cat checksums.txt
 
-      - name: Create release
+      - name: Upload binary to R2 (versioned copy + latest pointer)
+        working-directory: dist
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: https://f3d7a34807aa25ae756e73071763e3eb.r2.cloudflarestorage.com
+          R2_BUCKET: voxne
+        run: |
+          aws s3 cp voxne-local-windows-amd64.exe "s3://$R2_BUCKET/voxne-local/${{ github.ref_name }}/voxne-local-windows-amd64.exe" --endpoint-url "$R2_ENDPOINT"
+          aws s3 cp checksums.txt "s3://$R2_BUCKET/voxne-local/${{ github.ref_name }}/checksums.txt" --endpoint-url "$R2_ENDPOINT"
+          aws s3 cp voxne-local-windows-amd64.exe "s3://$R2_BUCKET/voxne-local/latest/voxne-local-windows-amd64.exe" --endpoint-url "$R2_ENDPOINT"
+          aws s3 cp checksums.txt "s3://$R2_BUCKET/voxne-local/latest/checksums.txt" --endpoint-url "$R2_ENDPOINT"
+
+      - name: Create release (version pointer only — binary hosted on R2, see workflow header)
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
           generate_release_notes: true
+          body: |
+            Binary hosted on R2 (exceeds GitHub's 2GiB release-asset limit):
+            https://pub-3fd7d09d2aba4887a9ebb141cf1e3a8f.r2.dev/voxne-local/${{ github.ref_name }}/voxne-local-windows-amd64.exe
           files: |
-            dist/voxne-local-windows-amd64.exe
             dist/checksums.txt
