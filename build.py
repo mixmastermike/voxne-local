@@ -69,6 +69,15 @@ HIDDEN_IMPORTS: list[str] = [
 COLLECT_ALL: list[str] = [
     "chatterbox",
     "torchaudio",
+    # perth (Resemble AI's audio watermarker, a chatterbox-tts dependency) ships
+    # its pretrained checkpoint as package data at perth/perth_net/pretrained/
+    # implicit/ (hparams.yaml, id.txt, perth_net_250000.pth.tar). PyInstaller's
+    # default import-scanning only picks up Python code, not that data — without
+    # --collect-all, hparams.yaml is missing at runtime and CheckpointManager.
+    # __init__ hits `assert dataset_hp is not None` in its "no existing checkpoint
+    # found" fallback path, since the normal inference load path never supplies
+    # dataset_hp.
+    "perth",
 ]
 
 # Packages whose .dist-info metadata must be bundled.
