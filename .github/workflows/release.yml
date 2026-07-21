@@ -112,6 +112,42 @@ jobs:
           aws s3 cp voxne-local-windows-amd64.exe "s3://$R2_BUCKET/voxne-local/latest/voxne-local-windows-amd64.exe" --endpoint-url "$R2_ENDPOINT"
           aws s3 cp checksums.txt "s3://$R2_BUCKET/voxne-local/latest/checksums.txt" --endpoint-url "$R2_ENDPOINT"
 
+      - name: Prune old R2 versions (keep last 3)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: https://f3d7a34807aa25ae756e73071763e3eb.r2.cloudflarestorage.com
+          R2_BUCKET: voxne
+        run: |
+          KEEP=3
+          echo "Listing versioned prefixes under voxne-local/ ..."
+          PREFIXES=$(aws s3api list-objects-v2 \
+            --bucket "$R2_BUCKET" \
+            --prefix "voxne-local/" \
+            --delimiter "/" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --query "CommonPrefixes[].Prefix" \
+            --output text)
+
+          # Extract version folder names (e.g. "v0.1.2"), excluding "latest"
+          VERSIONS=$(echo "$PREFIXES" | tr '\t' '\n' | sed -E 's#voxne-local/([^/]+)/#\1#' | grep -v '^latest$' | sort -V)
+
+          echo "Found versioned release(s):"
+          echo "$VERSIONS"
+
+          TO_DELETE=$(echo "$VERSIONS" | head -n -"$KEEP")
+
+          if [ -z "$TO_DELETE" ]; then
+            echo "Nothing to prune (fewer than $KEEP versions on hand)."
+          else
+            echo "Pruning old versions:"
+            echo "$TO_DELETE"
+            for v in $TO_DELETE; do
+              aws s3 rm "s3://$R2_BUCKET/voxne-local/$v/" --recursive --endpoint-url "$R2_ENDPOINT"
+            done
+          fi
+
       - name: Create release (version pointer only — binary hosted on R2, see workflow header)
         uses: softprops/action-gh-release@v2
         with:
